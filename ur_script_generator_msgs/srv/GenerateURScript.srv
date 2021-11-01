@@ -1,0 +1,14 @@
+# Request
+string command
+string robot_id
+string move_type
+string payload_mass
+string payload_cog
+float64 velocity
+float64 acceleration
+string goal_feature_name
+string tcp_name
+---
+# Reply
+string ur_script
+int32 gantry_pose
