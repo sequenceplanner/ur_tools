@@ -1,0 +1,5 @@
+def ur_script():
+  set_tcp($$set_tcp_pose$$)
+  movel($$movel_pose$$, $$movel_acceleration$$, $$movel_velocity$$)
+end
+ur_script()

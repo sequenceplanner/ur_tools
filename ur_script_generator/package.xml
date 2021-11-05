@@ -3,26 +3,28 @@
 <package format="2">
   <name>ur_script_generator</name>
   <version>0.0.1</version>
-  <description>
-    URScript generator package for the Volvo Rita project.
-  </description>
-
-  <author>Endre Erős</author>
-  <author email="endree@chalmers.se">Endre Erős</author>
-  
+  <description>Tool handler for the RITA project.</description>
+  <maintainer email="martin.dahl@gmail.com">Martin Dahl</maintainer>
   <maintainer email="endree@chalmers.se">Endre Erős</maintainer>
-
   <license>no_license</license>
+  <author>Martin Dahl</author>
+  <author>Endre Erős</author>
 
-  <exec_depend>rclpy</exec_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <build_depend>rcl</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>tool_handler_msgs</build_depend>
+  <build_depend>ur_script_generator_msgs</build_depend>
+  <build_depend>ur_script_msgs</build_depend>
+
+  <exec_depend>rcl</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-
-  <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
-  <test_depend>python3-pytest</test_depend>
+  <exec_depend>tool_handler_msgs</exec_depend>
+  <exec_depend>ur_script_generator_msgs</exec_depend>
+  <exec_depend>ur_script_msgs</exec_depend>
 
   <export>
-    <build_type>ament_python</build_type>
+    <build_type>ament_cmake</build_type>
   </export>
 </package>

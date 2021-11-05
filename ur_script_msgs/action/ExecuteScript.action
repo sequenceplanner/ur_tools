@@ -1,8 +1,0 @@
-# Goal
-string script
----
-# Result
-bool ok
----
-# Feedback
-int32 program_state
