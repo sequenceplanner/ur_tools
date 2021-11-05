@@ -13,10 +13,21 @@ use r2r::ServiceRequest;
 use r2r::{self, ActionServerGoal};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use serde::{Serialize, Deserialize};
 use tera;
 
-pub struct Interpretation {
+pub static BASEFRAME_ID: &'static str = "base";
+pub static FACEPLATE_ID: &'static str = "tool0";
 
+#[derive(Serialize, Deserialize)]
+pub struct Interpretation {
+    pub valid: bool,
+    pub target_in_base: String,
+    pub tcp_in_faceplate: String,
+    pub velocity: f64,
+    pub acceleration: f64,
+    pub consider_pwc: bool,
+    // pub pwc: PreferredJointConfig
 }
 
 lazy_static! {
@@ -156,46 +167,47 @@ async fn generate_script(
     }
 }
 
-// async fn interpret_message(
-//     message: &r2r::ur_script_generator_msgs::srv::GenerateURScript::Request,
-// ) ->
+async fn interpret_message(
+    message: &r2r::ur_script_generator_msgs::srv::GenerateURScript::Request,
+    tf_lookup_client: &r2r::Client<LookupTransform::Service>,
+) -> Interpretation {
 
-// def pose_to_string(self, tf_stamped):
-//         x = tf_stamped.transform.translation.x
-//         y = tf_stamped.transform.translation.y
-//         z = tf_stamped.transform.translation.z
-//         q = tf_stamped.transform.rotation
-//         angle = 2 * math.acos(q.w)
-//         den = math.sqrt(1 - q.w * q.w)
-//         if den < 0.001:
-//             Rx = q.x * angle
-//             Ry = q.y * angle
-//             Rz = q.z * angle
-//         else:
-//             Rx = (q.x / den) * angle
-//             Ry = (q.y / den) * angle
-//             Rz = (q.z / den) * angle
+    let target_in_base = match lookup_tf(
+        BASEFRAME_ID, &message.goal_feature_name, message.tf_lookup_deadline, tf_lookup_client
+    ).await {
+        Some(transform) => pose_to_string(&transform),
+        None => "failed".to_string()
+    };
 
-//         return (
-//             "p["
-//             + str(x)
-//             + ", "
-//             + str(y)
-//             + ", "
-//             + str(z)
-//             + ", "
-//             + str(Rx)
-//             + ", "
-//             + str(Ry)
-//             + ", "
-//             + str(Rz)
-//             + "]"
-//         )
+    let tcp_in_faceplate = match lookup_tf(
+        FACEPLATE_ID, &message.tcp_name, message.tf_lookup_deadline, tf_lookup_client
+    ).await {
+        Some(transform) => pose_to_string(&transform),
+        None => "failed".to_string()
+    };
+    
+    Interpretation {
+        valid: target_in_base != "falied" && tcp_in_faceplate != "falied",
+        target_in_base,
+        tcp_in_faceplate,
+        velocity: message.velocity,
+        acceleration: message.acceleration,
+        consider_pwc: false
+    }
+}
 
 fn pose_to_string(tf_stamped: &TransformStamped) -> String {
     let x = tf_stamped.transform.translation.x;
     let y = tf_stamped.transform.translation.y;
-    "".to_string()
+    let z = tf_stamped.transform.translation.z;
+    let rot = tf_stamped.transform.rotation.clone();
+    let angle = 2.0 * rot.w.acos();
+    let den = (1.0 - rot.w.powi(2)).sqrt();
+    let (rx, ry, rz) = match den < 0.001 {
+        true => (rot.x * angle, rot.y * angle, rot.z * angle),
+        false => ((rot.x / den) * angle, (rot.y / den) * angle, (rot.z / den) * angle)
+    };
+    format!("p[{},{},{},{},{},{}]", x, y, z, rx, ry, rz)
 }
 
 async fn lookup_tf(
