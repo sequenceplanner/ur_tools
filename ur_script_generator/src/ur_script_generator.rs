@@ -6,14 +6,16 @@ use lazy_static::lazy_static;
 use r2r::geometry_msgs::msg::Transform;
 use r2r::geometry_msgs::msg::TransformStamped;
 use r2r::tf_tools_msgs::srv::LookupTransform;
+use r2r::ur_script_generator_msgs::msg::JointPositions;
+use r2r::ur_script_generator_msgs::msg::Payload;
 use r2r::ur_script_generator_msgs::srv::GenerateURScript;
 use r2r::ur_script_msgs::action::ExecuteScript;
 use r2r::Context;
 use r2r::ServiceRequest;
 use r2r::{self, ActionServerGoal};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use serde::{Serialize, Deserialize};
 use tera;
 
 pub static BASEFRAME_ID: &'static str = "base";
@@ -22,12 +24,21 @@ pub static FACEPLATE_ID: &'static str = "tool0";
 #[derive(Serialize, Deserialize)]
 pub struct Interpretation {
     pub valid: bool,
-    pub target_in_base: String,
-    pub tcp_in_faceplate: String,
-    pub velocity: f64,
+    pub command: String,
     pub acceleration: f64,
-    pub consider_pwc: bool,
-    // pub pwc: PreferredJointConfig
+    pub velocity: f64,
+    pub use_execution_time: bool,
+    pub execution_time: f32,
+    pub use_blend_radius: bool,
+    pub blend_radius: f32,
+    pub use_joint_positions: bool,
+    pub joint_positions: JointPositions,
+    pub use_preferred_joint_config: bool,
+    pub preferred_joint_config: JointPositions,
+    pub use_payload: bool,
+    pub payload: Payload,
+    pub target_in_base: String,
+    pub tcp_in_faceplate: String
 }
 
 lazy_static! {
@@ -39,7 +50,7 @@ lazy_static! {
                     &format!("{:?}", std::time::SystemTime::now()),
                     "UR Script template parsing error(s): {}", e
                 );
-                ::std::process::exit(1); // don't exit but warn or don't collect
+                ::std::process::exit(1); // don't exit but warn or don't collect?
             }
         };
         tera
@@ -102,27 +113,32 @@ async fn ur_script_generator_server(
     loop {
         match requests.next().await {
             Some(request) => {
-                let generate = match template_names.contains(&request.message.command) {
-                    true => generate_script(&request.message).await.unwrap(),
-                    // true => match generate_script(&request.message) {
-                    //     Some(sctipt) =>
-                    // }
+                match template_names.contains(&request.message.command) {
+                    true => {
+                        generate_script(&request.message, &tf_lookup_client)
+                            .await
+                            .unwrap();
+                            request
+                            .respond(GenerateURScript::Response {
+                                success: false,
+                                script: String::default()
+                            })
+                            .expect("Could not send service response.")
+                        } // handle unwrap
                     false => {
                         r2r::log_warn!(
                             &format!("{:?}", std::time::SystemTime::now()),
                             "Template doesn't exist for command: {}.",
                             request.message.command
                         );
-                        String::default()
+                        request
+                            .respond(GenerateURScript::Response {
+                                success: false,
+                                script: String::default()
+                            })
+                            .expect("Could not send service response.")
                     }
-                };
-                let response = GenerateURScript::Response {
-                    gantry_pose: 1,
-                    ur_script: generate,
-                };
-                request
-                    .respond(response)
-                    .expect("could not send service response");
+                };                
             }
             None => break,
         }
@@ -133,17 +149,17 @@ async fn ur_script_generator_server(
 
 async fn generate_script(
     message: &r2r::ur_script_generator_msgs::srv::GenerateURScript::Request,
+    tf_lookup_client: &r2r::Client<LookupTransform::Service>,
 ) -> Option<String> {
     let empty_context = tera::Context::new();
     match TEMPLATES.render(
         &format!("{}.script", message.command),
-        // match &tera::Context::from_serialize(interpret_message(message)) {
-            match &tera::Context::from_serialize(message) {
+        match &tera::Context::from_serialize(interpret_message(message, &tf_lookup_client).await) {
             Ok(context) => context,
             Err(e) => {
                 r2r::log_error!(
                     &format!("{:?}", std::time::SystemTime::now()),
-                    "Creating a Tera Context from a serialized ROS message failed with: {}.",
+                    "Creating a Tera Context from a serialized Interpretation failed with: {}.",
                     e
                 );
                 r2r::log_warn!(
@@ -171,28 +187,50 @@ async fn interpret_message(
     message: &r2r::ur_script_generator_msgs::srv::GenerateURScript::Request,
     tf_lookup_client: &r2r::Client<LookupTransform::Service>,
 ) -> Interpretation {
-
     let target_in_base = match lookup_tf(
-        BASEFRAME_ID, &message.goal_feature_name, message.tf_lookup_deadline, tf_lookup_client
-    ).await {
+        BASEFRAME_ID,
+        &message.goal_feature_name,
+        message.tf_lookup_deadline,
+        tf_lookup_client,
+    )
+    .await
+    {
         Some(transform) => pose_to_string(&transform),
-        None => "failed".to_string()
+        None => "failed".to_string(),
     };
 
     let tcp_in_faceplate = match lookup_tf(
-        FACEPLATE_ID, &message.tcp_name, message.tf_lookup_deadline, tf_lookup_client
-    ).await {
+        FACEPLATE_ID,
+        &message.tcp_name,
+        message.tf_lookup_deadline,
+        tf_lookup_client,
+    )
+    .await
+    {
         Some(transform) => pose_to_string(&transform),
-        None => "failed".to_string()
+        None => "failed".to_string(),
     };
-    
+
+    let valid: bool = (target_in_base != "falied" && tcp_in_faceplate != "falied")
+        || (message.command == "move_j" && message.use_joint_positions);
+
     Interpretation {
-        valid: target_in_base != "falied" && tcp_in_faceplate != "falied",
-        target_in_base,
-        tcp_in_faceplate,
-        velocity: message.velocity,
+        valid,
+        command: message.command.to_string(),
         acceleration: message.acceleration,
-        consider_pwc: false
+        velocity: message.velocity,
+        use_execution_time: message.use_execution_time,
+        execution_time: message.execution_time,
+        use_blend_radius: message.use_blend_radius,
+        blend_radius: message.blend_radius,
+        use_joint_positions: message.use_joint_positions,
+        joint_positions: message.joint_positions.clone(),
+        use_preferred_joint_config: message.use_preferred_joint_config,
+        preferred_joint_config: message.preferred_joint_config.clone(),
+        use_payload: message.use_payload,
+        payload: message.payload.clone(),
+        target_in_base,
+        tcp_in_faceplate
     }
 }
 
@@ -205,7 +243,11 @@ fn pose_to_string(tf_stamped: &TransformStamped) -> String {
     let den = (1.0 - rot.w.powi(2)).sqrt();
     let (rx, ry, rz) = match den < 0.001 {
         true => (rot.x * angle, rot.y * angle, rot.z * angle),
-        false => ((rot.x / den) * angle, (rot.y / den) * angle, (rot.z / den) * angle)
+        false => (
+            (rot.x / den) * angle,
+            (rot.y / den) * angle,
+            (rot.z / den) * angle,
+        ),
     };
     format!("p[{},{},{},{},{},{}]", x, y, z, rx, ry, rz)
 }
