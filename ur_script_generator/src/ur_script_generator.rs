@@ -30,7 +30,7 @@ pub struct Interpretation {
     pub use_preferred_joint_config: bool,
     pub preferred_joint_config: String,
     pub use_payload: bool,
-    pub payload: Payload,
+    pub payload: String,
     pub target_in_base: String,
     pub tcp_in_faceplate: String,
 }
@@ -231,7 +231,6 @@ async fn interpret_message(
     message: &r2r::ur_script_generator_msgs::srv::GenerateURScript::Request,
     tf_lookup_client: &r2r::Client<LookupTransform::Service>,
 ) -> Interpretation {
-
     let target_in_base = match message.use_joint_positions && message.command == "move_j" {
         true => pose_to_string(&TransformStamped::default()),
         false => {
@@ -243,7 +242,7 @@ async fn interpret_message(
                     );
                     3000
                 }
-                _ => message.tf_lookup_deadline
+                _ => message.tf_lookup_deadline,
             };
             match lookup_tf(
                 BASEFRAME_ID,
@@ -259,7 +258,7 @@ async fn interpret_message(
         }
     };
 
-    let tcp_in_faceplate = match message.use_joint_positions && message.command == "move_j"{
+    let tcp_in_faceplate = match message.use_joint_positions && message.command == "move_j" {
         true => pose_to_string(&TransformStamped::default()),
         false => {
             let deadline = match message.tf_lookup_deadline {
@@ -270,16 +269,9 @@ async fn interpret_message(
                     );
                     3000
                 }
-                _ => message.tf_lookup_deadline
+                _ => message.tf_lookup_deadline,
             };
-            match lookup_tf(
-                FACEPLATE_ID,
-                &message.tcp_name,
-                deadline,
-                tf_lookup_client,
-            )
-            .await
-            {
+            match lookup_tf(FACEPLATE_ID, &message.tcp_name, deadline, tf_lookup_client).await {
                 Some(transform) => pose_to_string(&transform),
                 None => "failed".to_string(),
             }
@@ -302,10 +294,17 @@ async fn interpret_message(
         use_preferred_joint_config: message.use_preferred_joint_config,
         preferred_joint_config: joint_pose_to_string(message.preferred_joint_config.clone()),
         use_payload: message.use_payload,
-        payload: message.payload.clone(),
+        payload: payload_to_string(message.payload.clone()),
         target_in_base,
         tcp_in_faceplate,
     }
+}
+
+fn payload_to_string(p: Payload) -> String {
+    format!(
+        "{},[{},{},{}],[{},{},{},{},{},{}]",
+        p.mass, p.cog_x, p.cog_y, p.cog_z, p.ixx, p.iyy, p.izz, p.ixy, p.ixz, p.iyz
+    )
 }
 
 fn joint_pose_to_string(jp: JointPositions) -> String {

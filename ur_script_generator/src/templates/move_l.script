@@ -1,0 +1,14 @@
+def move_l_script():
+  {%- if use_payload %}
+  set_target_payload({{ payload }})
+  {%- endif %}
+  set_tcp({{ tcp_in_faceplate }})
+  movel({{ target_in_base }}, a={{ acceleration }}, v={{ velocity }}
+  {%- if use_execution_time -%}
+  , t={{ execution_time }}
+  {%- endif -%}
+  {%- if use_blend_radius -%}
+  , r={{ blend_radius }}
+  {%- endif -%})
+end
+move_l_script()

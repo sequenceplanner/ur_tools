@@ -1,9 +1,24 @@
 def move_j_script():
+  {%- if use_payload %}
+  set_target_payload({{ payload }})
+  {%- endif %}
   set_tcp({{ tcp_in_faceplate }})
   {% if use_joint_positions -%}
-    movej({{ joint_positions }}, a={{ acceleration }}, v={{ velocity }})
+    movej({{ joint_positions }}, a={{ acceleration }}, v={{ velocity }}
+    {%- if use_execution_time -%}
+    , t={{ execution_time }}
+    {%- endif -%}
+    {%- if use_blend_radius -%}
+    , r={{ blend_radius }}
+    {%- endif -%})
   {%- else -%}
-    NOT USING JOINT POSITIONS
-  {% endif %}
+    movej(get_inverse_kin({{ target_in_base }}), a={{ acceleration }}, v={{ velocity }}
+    {%- if use_execution_time -%}
+    , t={{ execution_time }}
+    {%- endif -%}
+    {%- if use_blend_radius -%}
+    , r={{ blend_radius }}
+    {%- endif -%})
+  {%- endif %}
 end
 move_j_script()
