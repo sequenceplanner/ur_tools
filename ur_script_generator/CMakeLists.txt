@@ -22,6 +22,7 @@ r2r_cargo(std_msgs               # just to test that it works
 # install binaries
 install(PROGRAMS
   ${CMAKE_SOURCE_DIR}/target/release/ur_script_generator
+  ${CMAKE_SOURCE_DIR}/target/release/ur_script_generator_test
   DESTINATION lib/${PROJECT_NAME}
 )
 

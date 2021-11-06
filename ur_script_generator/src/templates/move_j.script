@@ -1,0 +1,9 @@
+def move_j_script():
+  set_tcp({{ tcp_in_faceplate }})
+  {% if use_joint_positions -%}
+  movej({{ joint_positions }}, a={{ acceleration }}, v={{ velocity }})
+  {%- else %}
+  NOT USING JOINT POSITIONS
+  {% endif %}
+end
+move_j_script()
