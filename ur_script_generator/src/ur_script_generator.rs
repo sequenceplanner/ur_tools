@@ -26,9 +26,9 @@ pub struct Interpretation {
     pub use_blend_radius: bool,
     pub blend_radius: f32,
     pub use_joint_positions: bool,
-    pub joint_positions: JointPositions,
+    pub joint_positions: String,
     pub use_preferred_joint_config: bool,
-    pub preferred_joint_config: JointPositions,
+    pub preferred_joint_config: String,
     pub use_payload: bool,
     pub payload: Payload,
     pub target_in_base: String,
@@ -37,7 +37,7 @@ pub struct Interpretation {
 
 lazy_static! {
     pub static ref TEMPLATES: tera::Tera = {
-        // let tera = match tera::Tera::new("src/templates/*.script") {
+        // let tera = match tera::Tera::new("src/templates/*.script") { // how?
         let tera = match tera::Tera::new("/home/endre/Desktop/templates/*.script") {
             Ok(t) => {
                 r2r::log_warn!(
@@ -113,6 +113,12 @@ async fn ur_script_generator_server(
         .get_template_names()
         .map(|x| x.to_string())
         .collect::<Vec<String>>();
+    if template_names.len() == 0 {
+        r2r::log_error!(
+            &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+            "Couldn't find any Tera templates."
+        );
+    }
     for template in &template_names {
         r2r::log_info!(
             &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
@@ -127,8 +133,11 @@ async fn ur_script_generator_server(
                 match template_names.contains(&format!("{}.script", &request.message.command)) {
                     true => match generate_script(&request.message, &tf_lookup_client).await {
                         Some(script) => {
-                            r2r::log_warn!(
-                                &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                            r2r::log_info!(
+                                &format!(
+                                    "URSG {}",
+                                    Local::now().format(TIME_FORMAT_STR).to_string()
+                                ),
                                 "Generated UR Script: \n{}",
                                 script
                             );
@@ -141,7 +150,10 @@ async fn ur_script_generator_server(
                         }
                         None => {
                             r2r::log_error!(
-                                &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                                &format!(
+                                    "URSG {}",
+                                    Local::now().format(TIME_FORMAT_STR).to_string()
+                                ),
                                 "Failed to generate UR Script.",
                             );
                             request
@@ -179,34 +191,39 @@ async fn generate_script(
     tf_lookup_client: &r2r::Client<LookupTransform::Service>,
 ) -> Option<String> {
     let empty_context = tera::Context::new();
-    match TEMPLATES.render(
-        &format!("{}.script", message.command),
-        match &tera::Context::from_serialize(interpret_message(message, &tf_lookup_client).await) {
-            Ok(context) => context,
+    let interpreted_message = interpret_message(message, &tf_lookup_client).await;
+    if interpreted_message.valid {
+        match TEMPLATES.render(
+            &format!("{}.script", message.command),
+            match &tera::Context::from_serialize(interpreted_message) {
+                Ok(context) => context,
+                Err(e) => {
+                    r2r::log_error!(
+                        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                        "Creating a Tera Context from a serialized Interpretation failed with: {}.",
+                        e
+                    );
+                    r2r::log_warn!(
+                        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                        "An empty Tera Context will be used instead."
+                    );
+                    &empty_context
+                }
+            },
+        ) {
+            Ok(script) => Some(script),
             Err(e) => {
                 r2r::log_error!(
                     &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
-                    "Creating a Tera Context from a serialized Interpretation failed with: {}.",
+                    "Rendering the {}.script Tera Template failed with: {}.",
+                    message.command,
                     e
                 );
-                r2r::log_warn!(
-                    &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
-                    "An empty Tera Context will be used instead."
-                );
-                &empty_context
+                None
             }
-        },
-    ) {
-        Ok(script) => Some(script),
-        Err(e) => {
-            r2r::log_error!(
-                &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
-                "Rendering the {}.script Tera Template failed with: {}.",
-                message.command,
-                e
-            );
-            None
         }
+    } else {
+        None
     }
 }
 
@@ -214,13 +231,24 @@ async fn interpret_message(
     message: &r2r::ur_script_generator_msgs::srv::GenerateURScript::Request,
     tf_lookup_client: &r2r::Client<LookupTransform::Service>,
 ) -> Interpretation {
-    let target_in_base = match message.use_joint_positions {
+
+    let target_in_base = match message.use_joint_positions && message.command == "move_j" {
         true => pose_to_string(&TransformStamped::default()),
         false => {
+            let deadline = match message.tf_lookup_deadline {
+                0 => {
+                    r2r::log_warn!(
+                        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                        "TF Lookup deadline was set to 0ms, changing to 3000ms."
+                    );
+                    3000
+                }
+                _ => message.tf_lookup_deadline
+            };
             match lookup_tf(
                 BASEFRAME_ID,
                 &message.goal_feature_name,
-                message.tf_lookup_deadline,
+                deadline,
                 tf_lookup_client,
             )
             .await
@@ -231,13 +259,23 @@ async fn interpret_message(
         }
     };
 
-    let tcp_in_faceplate = match message.use_joint_positions {
+    let tcp_in_faceplate = match message.use_joint_positions && message.command == "move_j"{
         true => pose_to_string(&TransformStamped::default()),
         false => {
+            let deadline = match message.tf_lookup_deadline {
+                0 => {
+                    r2r::log_warn!(
+                        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                        "TF Lookup deadline was set to 0ms, changing to 3000ms."
+                    );
+                    3000
+                }
+                _ => message.tf_lookup_deadline
+            };
             match lookup_tf(
                 FACEPLATE_ID,
                 &message.tcp_name,
-                message.tf_lookup_deadline,
+                deadline,
                 tf_lookup_client,
             )
             .await
@@ -248,8 +286,7 @@ async fn interpret_message(
         }
     };
 
-    let valid: bool = (target_in_base != "falied" && tcp_in_faceplate != "falied")
-        || (message.command == "move_j" && message.use_joint_positions);
+    let valid = tcp_in_faceplate != "failed" && target_in_base != "failed";
 
     Interpretation {
         valid,
@@ -261,14 +298,21 @@ async fn interpret_message(
         use_blend_radius: message.use_blend_radius,
         blend_radius: message.blend_radius,
         use_joint_positions: message.use_joint_positions,
-        joint_positions: message.joint_positions.clone(),
+        joint_positions: joint_pose_to_string(message.joint_positions.clone()),
         use_preferred_joint_config: message.use_preferred_joint_config,
-        preferred_joint_config: message.preferred_joint_config.clone(),
+        preferred_joint_config: joint_pose_to_string(message.preferred_joint_config.clone()),
         use_payload: message.use_payload,
         payload: message.payload.clone(),
         target_in_base,
         tcp_in_faceplate,
     }
+}
+
+fn joint_pose_to_string(jp: JointPositions) -> String {
+    format!(
+        "[{},{},{},{},{},{}]",
+        jp.j0, jp.j1, jp.j2, jp.j3, jp.j4, jp.j5
+    )
 }
 
 fn pose_to_string(tf_stamped: &TransformStamped) -> String {

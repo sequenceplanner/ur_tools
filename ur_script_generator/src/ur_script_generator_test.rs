@@ -33,9 +33,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "UR Script Generator Test Client Node started."
     );
 
-    ursg_test(
-        &client,
-    ).await?;
+    let mut messages = vec!();
+    let mut message_1 = GenerateURScript::Request::default();
+    message_1.use_joint_positions = true;
+    message_1.use_execution_time = true;
+    message_1.execution_time = 1.75;
+    message_1.command = "move_j".to_string();
+    message_1.joint_positions = JointPositions {
+        j0: 1.5707,
+        j1: 1.5707,
+        j2: 1.5707,
+        j3: 1.5707,
+        j4: 1.5707,
+        j5: 1.5707,
+    };
+    messages.push(message_1);
+
+    let mut message_2 = GenerateURScript::Request::default();
+    message_2.command = "move_j".to_string();
+    message_2.goal_feature_name = "frame_1".to_string();
+    message_2.tcp_name = "frame_2".to_string();
+    messages.push(message_2);
+
+    for message in messages {
+        ursg_test(
+            &client,
+            message
+        ).await?;
+    }
+    
 
     handle.join().unwrap();
 
@@ -44,22 +70,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn ursg_test(
     client: &r2r::Client<GenerateURScript::Service>,
+    message: GenerateURScript::Request
 ) -> Result<(), Box<dyn std::error::Error>> {
-    
-    let mut request = GenerateURScript::Request::default();
-    request.use_joint_positions = true;
-    request.command = "move_j".to_string();
-    request.joint_positions = JointPositions {
-        j0: 1.5707,
-        j1: 1.5707,
-        j2: 1.5707,
-        j3: 1.5707,
-        j4: 1.5707,
-        j5: 1.5707,
-    };
 
     let response = client
-        .request(&request)
+        .request(&message)
         .expect("Could not send URSG request.")
         .await
         .expect("Cancelled.");
@@ -81,7 +96,7 @@ async fn ursg_test(
             r2r::log_error!(
                 &format!("URSG TEST {}", Local::now().format(TIME_FORMAT_STR).to_string()),
                 "Couldn't generate UR Script for command '{}'.",
-                request.command
+                message.command
             );
         }
     }
