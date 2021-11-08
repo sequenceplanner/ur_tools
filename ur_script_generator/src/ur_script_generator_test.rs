@@ -1,10 +1,10 @@
 use r2r;
-use chrono::prelude::*;
+// use chrono::prelude::*;
 use r2r::ur_script_generator_msgs::srv::GenerateURScript;
 use r2r::ur_script_generator_msgs::msg::JointPositions;
 use r2r::ur_script_generator_msgs::msg::Payload;
 
-const TIME_FORMAT_STR: &'static str = "%Y-%m-%d %H:%M:%S";
+// const TIME_FORMAT_STR: &'static str = "%Y-%m-%d %H:%M:%S";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,16 +20,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     r2r::log_warn!(
-        &format!("URSG TEST {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+        "ur_script_generator_test",
         "Waiting for UR Script Generator Service..."
     );
     waiting_for_server.await?;
     r2r::log_info!(
-        &format!("URSG TEST {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+        "ur_script_generator_test",
         "UR Script Generator Service available."
     );
     r2r::log_info!(
-        &format!("URSG TEST {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+        "ur_script_generator_test",
         "UR Script Generator Test Client Node started."
     );
 
@@ -114,21 +114,21 @@ async fn ursg_test(
         .expect("Cancelled.");
 
     r2r::log_info!(
-        &format!("URSG TEST {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+        "ur_script_generator_test",
         "Request to UR Script Generator sent."
     );
 
     match response.success {
         true => {
             r2r::log_info!(
-                &format!("URSG TEST {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                "ur_script_generator_test",
                 "Got generated UR Script: \n{}",
                 response.script
             );
         },
         false => {
             r2r::log_error!(
-                &format!("URSG TEST {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                "ur_script_generator_test",
                 "Couldn't generate UR Script for command '{}'.",
                 message.command
             );

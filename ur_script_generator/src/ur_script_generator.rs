@@ -2,6 +2,7 @@ use chrono::prelude::*;
 use futures::stream::Stream;
 use futures::StreamExt;
 use lazy_static::lazy_static;
+use r2r::ParameterValue;
 use r2r::geometry_msgs::msg::TransformStamped;
 use r2r::tf_tools_msgs::srv::LookupTransform;
 use r2r::ur_script_generator_msgs::msg::JointPositions;
@@ -35,33 +36,37 @@ pub struct Interpretation {
     pub tcp_in_faceplate: String,
 }
 
-lazy_static! {
-    pub static ref TEMPLATES: tera::Tera = {
-        // let tera = match tera::Tera::new("src/templates/*.script") { // how?
-        let tera = match tera::Tera::new("/home/endre/Desktop/templates/*.script") {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let ctx = r2r::Context::create()?;
+    let mut node = r2r::Node::create(ctx, "ur_script_generator", "")?;
+
+    let params = node.params.clone();
+    let params_things =  params.lock().unwrap();
+    let templates_path = match params_things.get("templates_path").unwrap() {
+        ParameterValue::String(value) => value,
+        _ => ""
+    };
+
+    let templates: tera::Tera = {
+        let tera = match tera::Tera::new(&format!("{}/templates/*.script", templates_path)) {
             Ok(t) => {
                 r2r::log_warn!(
-                    &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                    "ur_script_generator",
                     "Searching for Tera templates, wait...",
                 );
                 t
             },
             Err(e) => {
                 r2r::log_error!(
-                    &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                    "ur_script_generator",
                     "UR Script template parsing error(s): {}", e
-                );
-                ::std::process::exit(1); // don't exit but warn or don't collect?
+                ); 
+                ::std::process::exit(1);
             }
         };
         tera
     };
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let ctx = r2r::Context::create()?;
-    let mut node = r2r::Node::create(ctx, "ur_script_generator", "")?;
 
     let service = node.create_service::<GenerateURScript::Service>("ur_script_generator")?;
     let tf_lookup_client = node.create_client::<LookupTransform::Service>("tf_lookup")?;
@@ -72,28 +77,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     r2r::log_warn!(
-        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+        "ur_script_generator",
         "Waiting for TF Lookup service..."
     );
     waiting_for_tf_lookup_server.await?;
     r2r::log_info!(
-        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+        "ur_script_generator",
         "TF Lookup Service available."
     );
     r2r::log_info!(
-        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+        "ur_script_generator",
         "UR Script Generator Service node started."
     );
 
     tokio::task::spawn(async move {
-        let result = ur_script_generator_server(service, tf_lookup_client).await;
+        let result = ur_script_generator_server(service, tf_lookup_client, templates).await;
         match result {
             Ok(()) => r2r::log_info!(
-                &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                "ur_script_generator",
                 "UR Script Generator Service call succeeded."
             ),
             Err(e) => r2r::log_error!(
-                &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                "ur_script_generator",
                 "UR Script Generator Service call failed with: {}.",
                 e
             ),
@@ -108,20 +113,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn ur_script_generator_server(
     mut requests: impl Stream<Item = ServiceRequest<GenerateURScript::Service>> + Unpin,
     tf_lookup_client: r2r::Client<LookupTransform::Service>,
+    templates: tera::Tera,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let template_names = TEMPLATES
+    let template_names = templates
         .get_template_names()
         .map(|x| x.to_string())
         .collect::<Vec<String>>();
     if template_names.len() == 0 {
         r2r::log_error!(
-            &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+            "ur_script_generator",
             "Couldn't find any Tera templates."
         );
     }
     for template in &template_names {
         r2r::log_info!(
-            &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+            "ur_script_generator",
             "Found template: {:?}",
             template
         );
@@ -131,7 +137,7 @@ async fn ur_script_generator_server(
         match requests.next().await {
             Some(request) => {
                 match template_names.contains(&format!("{}.script", &request.message.command)) {
-                    true => match generate_script(&request.message, &tf_lookup_client).await {
+                    true => match generate_script(&request.message, &tf_lookup_client, &templates).await {
                         Some(script) => {
                             r2r::log_info!(
                                 &format!(
@@ -166,7 +172,7 @@ async fn ur_script_generator_server(
                     },
                     false => {
                         r2r::log_warn!(
-                            &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                            "ur_script_generator",
                             "Template doesn't exist for command: {}.",
                             request.message.command
                         );
@@ -189,22 +195,23 @@ async fn ur_script_generator_server(
 async fn generate_script(
     message: &r2r::ur_script_generator_msgs::srv::GenerateURScript::Request,
     tf_lookup_client: &r2r::Client<LookupTransform::Service>,
+    templates: &tera::Tera
 ) -> Option<String> {
     let empty_context = tera::Context::new();
     let interpreted_message = interpret_message(message, &tf_lookup_client).await;
     if interpreted_message.valid {
-        match TEMPLATES.render(
+        match templates.render(
             &format!("{}.script", message.command),
             match &tera::Context::from_serialize(interpreted_message) {
                 Ok(context) => context,
                 Err(e) => {
                     r2r::log_error!(
-                        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                        "ur_script_generator",
                         "Creating a Tera Context from a serialized Interpretation failed with: {}.",
                         e
                     );
                     r2r::log_warn!(
-                        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                        "ur_script_generator",
                         "An empty Tera Context will be used instead."
                     );
                     &empty_context
@@ -214,7 +221,7 @@ async fn generate_script(
             Ok(script) => Some(script),
             Err(e) => {
                 r2r::log_error!(
-                    &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                    "ur_script_generator",
                     "Rendering the {}.script Tera Template failed with: {}.",
                     message.command,
                     e
@@ -237,7 +244,7 @@ async fn interpret_message(
             let deadline = match message.tf_lookup_deadline {
                 0 => {
                     r2r::log_warn!(
-                        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                        "ur_script_generator",
                         "TF Lookup deadline was set to 0ms, changing to 3000ms."
                     );
                     3000
@@ -264,7 +271,7 @@ async fn interpret_message(
             let deadline = match message.tf_lookup_deadline {
                 0 => {
                     r2r::log_warn!(
-                        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                        "ur_script_generator",
                         "TF Lookup deadline was set to 0ms, changing to 3000ms."
                     );
                     3000
@@ -351,7 +358,7 @@ async fn lookup_tf(
         .expect("Cancelled.");
 
     r2r::log_info!(
-        &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+        "ur_script_generator",
         "Request to TF Lookup sent."
     );
 
@@ -359,7 +366,7 @@ async fn lookup_tf(
         true => Some(response.transform),
         false => {
             r2r::log_error!(
-                &format!("URSG {}", Local::now().format(TIME_FORMAT_STR).to_string()),
+                "ur_script_generator",
                 "Couldn't lookup TF for parent '{}' and child '{}'.",
                 parent_id,
                 child_id

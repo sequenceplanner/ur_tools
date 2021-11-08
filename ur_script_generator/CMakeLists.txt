@@ -26,5 +26,8 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(DIRECTORY templates
+ DESTINATION share/${PROJECT_NAME})
+
 # we need this for ros/colcon
 ament_package()
