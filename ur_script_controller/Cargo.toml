@@ -1,0 +1,14 @@
+[package]
+name = "ur_script_controller"
+version = "0.1.0"
+authors = ["Endre Erős <endree@chalmers.se>"]
+edition = "2018"
+
+[dependencies]
+r2r = { git = "https://github.com/sequenceplanner/r2r", version = "0.5.3" }
+futures = "0.3.15"
+tokio = { version = "1", features = ["full"] }
+
+[[bin]]
+name = "ur_script_controller"
+path = "src/ur_script_controller.rs"

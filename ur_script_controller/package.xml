@@ -1,26 +1,22 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format2.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="2">
-  <name>ur_script_generator</name>
+  <name>ur_script_controller</name>
   <version>0.0.1</version>
-  <description>Tool handler for the RITA project.</description>
-  <maintainer email="martin.dahl@gmail.com">Martin Dahl</maintainer>
+  <description>UR script Controller.</description>
   <maintainer email="endree@chalmers.se">Endre Erős</maintainer>
   <license>no_license</license>
-  <author>Martin Dahl</author>
   <author>Endre Erős</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <build_depend>rcl</build_depend>
   <build_depend>std_msgs</build_depend>
-  <build_depend>tool_handler_msgs</build_depend>
   <build_depend>ur_tools_msgs</build_depend>
   <build_depend>ur_script_msgs</build_depend>
 
   <exec_depend>rcl</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>tool_handler_msgs</exec_depend>
   <exec_depend>ur_tools_msgs</exec_depend>
   <exec_depend>ur_script_msgs</exec_depend>
 

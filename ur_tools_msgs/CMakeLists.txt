@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(ur_script_generator_msgs)
+project(ur_tools_msgs)
 
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
@@ -27,6 +27,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Payload.msg"
   "msg/JointPositions.msg"
   "srv/GenerateURScript.srv"
+  "action/URScriptControl.action"
   DEPENDENCIES
     builtin_interfaces
     geometry_msgs

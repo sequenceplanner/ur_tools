@@ -1,20 +1,17 @@
-use chrono::prelude::*;
 use futures::stream::Stream;
 use futures::StreamExt;
-use lazy_static::lazy_static;
 use r2r::ParameterValue;
 use r2r::geometry_msgs::msg::TransformStamped;
 use r2r::tf_tools_msgs::srv::LookupTransform;
-use r2r::ur_script_generator_msgs::msg::JointPositions;
-use r2r::ur_script_generator_msgs::msg::Payload;
-use r2r::ur_script_generator_msgs::srv::GenerateURScript;
+use r2r::ur_tools_msgs::msg::JointPositions;
+use r2r::ur_tools_msgs::msg::Payload;
+use r2r::ur_tools_msgs::srv::GenerateURScript;
 use r2r::ServiceRequest;
 use serde::{Deserialize, Serialize};
 use tera;
 
 pub static BASEFRAME_ID: &'static str = "base";
 pub static FACEPLATE_ID: &'static str = "tool0";
-const TIME_FORMAT_STR: &'static str = "%Y-%m-%d %H:%M:%S";
 
 #[derive(Serialize, Deserialize)]
 pub struct Interpretation {
@@ -141,8 +138,7 @@ async fn ur_script_generator_server(
                         Some(script) => {
                             r2r::log_info!(
                                 &format!(
-                                    "URSG {}",
-                                    Local::now().format(TIME_FORMAT_STR).to_string()
+                                    "ur_script_generator",
                                 ),
                                 "Generated UR Script: \n{}",
                                 script
@@ -157,8 +153,7 @@ async fn ur_script_generator_server(
                         None => {
                             r2r::log_error!(
                                 &format!(
-                                    "URSG {}",
-                                    Local::now().format(TIME_FORMAT_STR).to_string()
+                                    "ur_script_generator",
                                 ),
                                 "Failed to generate UR Script.",
                             );
@@ -193,7 +188,7 @@ async fn ur_script_generator_server(
 }
 
 async fn generate_script(
-    message: &r2r::ur_script_generator_msgs::srv::GenerateURScript::Request,
+    message: &r2r::ur_tools_msgs::srv::GenerateURScript::Request,
     tf_lookup_client: &r2r::Client<LookupTransform::Service>,
     templates: &tera::Tera
 ) -> Option<String> {
@@ -235,7 +230,7 @@ async fn generate_script(
 }
 
 async fn interpret_message(
-    message: &r2r::ur_script_generator_msgs::srv::GenerateURScript::Request,
+    message: &r2r::ur_tools_msgs::srv::GenerateURScript::Request,
     tf_lookup_client: &r2r::Client<LookupTransform::Service>,
 ) -> Interpretation {
     let target_in_base = match message.use_joint_positions && message.command == "move_j" {

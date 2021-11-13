@@ -1,8 +1,8 @@
 use r2r;
 // use chrono::prelude::*;
-use r2r::ur_script_generator_msgs::srv::GenerateURScript;
-use r2r::ur_script_generator_msgs::msg::JointPositions;
-use r2r::ur_script_generator_msgs::msg::Payload;
+use r2r::ur_tools_msgs::srv::GenerateURScript;
+use r2r::ur_tools_msgs::msg::JointPositions;
+use r2r::ur_tools_msgs::msg::Payload;
 
 // const TIME_FORMAT_STR: &'static str = "%Y-%m-%d %H:%M:%S";
 

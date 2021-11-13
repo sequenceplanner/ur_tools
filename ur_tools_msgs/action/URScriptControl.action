@@ -1,0 +1,69 @@
+# Request
+
+# This command will deretmine which template 
+# will be parsed to yield a ur script. It has 
+# to be assured that a script template exists.
+string command
+
+# If the URSG is to generate a move script,
+# additional parameters can be set.
+
+# Acceleration.
+# If command is 'move_j', joint acceleration of leading axis [rad/s^2].
+# If command is 'move_l', tool acceleration [m/s^2].
+float64 acceleration
+
+# Velocity.
+# If command is 'move_j', joint acceleration of leading axis [rad/s^2].
+# If command is 'move_l', tool acceleration [m/s^2].
+float64 velocity
+
+# Movement execution time is the alternative parameter
+# that can control the speed of the robot. If set, the robot will
+# execute the motion in the time specified here (in seconds).
+# Time setting has priority over speed and acceleration settings.
+bool use_execution_time
+float32 execution_time
+
+# Blend radius. If a blend radius is set, the robot arm trajectory 
+# will be modified to avoid the robot stopping at the point.
+# However, if the blend region of this move overlaps with the blend
+# radius of previous or following waypoints, this move will be 
+# skipped, and an ’Overlapping Blends’ warning message will be generated.
+bool use_blend_radius
+float32 blend_radius
+
+# If executing a 'move_j', direct joint positions can be used
+# instead of finding an inverse kinematics solution.
+bool use_joint_positions
+JointPositions joint_positions
+
+# If executing a 'move_l', a preferred joint configuration
+# can be set, so that the IK solver can choose it if possible.
+bool use_preferred_joint_config
+JointPositions preferred_joint_config
+
+# If a payload should be used. Mass, CoG and Inertia can be set.
+bool use_payload
+Payload payload
+
+# Name of the frame in TF to go to.
+string goal_feature_name
+
+# Name of the TCP to be used to go to the goal feature frame. 
+string tcp_name
+
+# The maximum time that should be spent looking up tf.
+int32 tf_lookup_deadline
+
+---
+# Reply
+
+# If the control action was successful.
+bool success
+
+---
+# Feedback
+
+# Current state of the action execution.
+string current_state
