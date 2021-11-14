@@ -19,8 +19,12 @@ setup(
             glob("robots/lage/*"),
         ),
         (
-            os.path.join("share", package_name, "robots", "ursim"),
-            glob("robots/ursim/*"),
+            os.path.join("share", package_name, "robots", "ursim3e"),
+            glob("robots/ursim3e/*"),
+        ),
+        (
+            os.path.join("share", package_name, "robots", "ursim10e"),
+            glob("robots/ursim10e/*"),
         ),
         ("share/" + package_name, ["package.xml"]),
     ],
