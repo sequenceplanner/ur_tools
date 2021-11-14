@@ -1,0 +1,51 @@
+def safe_move_j_script():
+  move_done = False
+  force_done = False
+  thread move_thread():
+    {%- if use_payload %}
+    set_target_payload({{ payload }})
+    {%- endif %}
+    set_tcp({{ tcp_in_faceplate }})
+    {% if use_joint_positions -%}
+      movej({{ joint_positions }}, a={{ acceleration }}, v={{ velocity }}
+      {%- if use_execution_time -%}
+      , t={{ execution_time }}
+      {%- endif -%}
+      {%- if use_blend_radius -%}
+      , r={{ blend_radius }}
+      {%- endif -%})
+    {%- else -%}
+      movej(get_inverse_kin({{ target_in_base }}), a={{ acceleration }}, v={{ velocity }}
+      {%- if use_execution_time -%}
+      , t={{ execution_time }}
+      {%- endif -%}
+      {%- if use_blend_radius -%}
+      , r={{ blend_radius }}
+      {%- endif -%})
+    {%- endif %}
+    move_done = True
+  end
+  thread force_thread():
+    while True:
+    forces = get_tcp_force()
+      if forces[0] > 20.0 or forces[1] > 20.0 or forces[2] > 20.0 or forces[0] < -20.0 or forces[1] < -20.0 or forces[2] < -20.0:
+        force_done = True
+        break
+      end
+    sleep(0.002)
+    end
+  end
+  t1 = run move_thread()
+  t2 = run force_thread()
+  while True:
+    if move_done or force_done:
+      break
+    end
+    sleep(0.002)
+  end
+  kill t1
+  kill t2
+  stopj(5.0)
+  sleep(0.5)
+end
+safe_move_j_script()

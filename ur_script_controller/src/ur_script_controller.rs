@@ -176,16 +176,30 @@ async fn execute_script(
 
     match result.await {
         Ok((status, msg)) => {
-            r2r::log_info!(
-                "ur_script_controller",
-                "Executing the UR Script succeeded with: {} :: {:?}",
-                status, msg
-            );
+            match status {
+                r2r::GoalStatus::Aborted => {
+                    r2r::log_info!(
+                        "ur_script_controller",
+                        "Goal succesfully aborted with: {:?}",
+                        msg
+                    );
+                    let _ = g.publish_feedback(URScriptControl::Feedback {
+                        current_state: "Goal succesfully aborted.".into(),
+                    });
+                    true
+                }
+                _ => {
+                    r2r::log_info!(
+                        "ur_script_controller",
+                        "Executing the UR Script succeeded."
+                    );
+                    let _ = g.publish_feedback(URScriptControl::Feedback {
+                        current_state: "Executing the UR Script succeeded.".into(),
+                    });
+                    true
+                }
+            }
             
-            let _ = g.publish_feedback(URScriptControl::Feedback {
-                current_state: "Executing the UR Script succeeded.".into(),
-            });
-            true
         }
         Err(e) => {
             r2r::log_error!(

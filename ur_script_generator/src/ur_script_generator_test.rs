@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "UR Script Generator Test Client Node started."
     );
 
-    let commands = vec!("move_j", "move_l");
+    let commands = vec!("safe_move_j");
 
     let mut messages = vec!();
     let bools = vec!(true, false);
@@ -42,8 +42,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut message = GenerateURScript::Request::default();
     message.acceleration = 0.3;
     message.velocity = 0.5;
-    message.goal_feature_name = "frame_1".to_string();
-    message.tcp_name = "frame_2".to_string();
+    message.goal_feature_name = "pos1".to_string();
+    message.tcp_name = "svt_tcp".to_string();
     for b1 in &bools {
         let mut message = message.clone();
         message.use_execution_time = *b1;
