@@ -1,0 +1,7 @@
+{
+    "name": "case_r1",
+    "ur_type": "ur3e",
+    "prefix": "rita",
+    "ip_address": "192.168.10.10",
+    "rtde_port": 30003
+}

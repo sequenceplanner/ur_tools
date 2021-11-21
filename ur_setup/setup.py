@@ -26,6 +26,10 @@ setup(
             os.path.join("share", package_name, "robots", "ursim10e"),
             glob("robots/ursim10e/*"),
         ),
+        (
+            os.path.join("share", package_name, "robots", "case_r1"),
+            glob("robots/case_r1/*"),
+        ),
         ("share/" + package_name, ["package.xml"]),
     ],
     install_requires=["setuptools"],

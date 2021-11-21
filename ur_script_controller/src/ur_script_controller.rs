@@ -82,13 +82,13 @@ async fn ur_script_controller_server(
                             false => {
                                 let _ = g.abort(URScriptControl::Result { success: false });
                                 continue;
-                            },
+                            }
                         }
                     }
                     None => {
                         let _ = g.abort(URScriptControl::Result { success: false });
                         continue;
-                    },
+                    }
                 }
             }
             None => (),
@@ -147,7 +147,7 @@ async fn generate_script(
                 current_state: "Failed to get generated UR Script.".into(),
             });
             None
-        },
+        }
     }
 }
 
@@ -168,43 +168,46 @@ async fn execute_script(
         current_state: "Sending request to UR Script Driver.".into(),
     });
 
-    let (_goal, result, _feedback) = urc_client
-        .send_goal_request(goal)
-        .expect("Could not send goal request.")
-        .await
-        .expect("Did not get goal.");
+    let (_goal, result, _feedback) = match urc_client.send_goal_request(goal) {
+        Ok(x) => match x.await {
+            Ok(y) => y,
+            Err(_) => {
+                r2r::log_info!("ur_script_controller", "Could not send goal request.");
+                return false;
+            }
+        },
+        Err(_) => {
+            r2r::log_info!("ur_script_controller", "Did not get goal.");
+            return false;
+        }
+    };
 
     match result.await {
-        Ok((status, msg)) => {
-            match status {
-                r2r::GoalStatus::Aborted => {
-                    r2r::log_info!(
-                        "ur_script_controller",
-                        "Goal succesfully aborted with: {:?}",
-                        msg
-                    );
-                    let _ = g.publish_feedback(URScriptControl::Feedback {
-                        current_state: "Goal succesfully aborted.".into(),
-                    });
-                    true
-                }
-                _ => {
-                    r2r::log_info!(
-                        "ur_script_controller",
-                        "Executing the UR Script succeeded."
-                    );
-                    let _ = g.publish_feedback(URScriptControl::Feedback {
-                        current_state: "Executing the UR Script succeeded.".into(),
-                    });
-                    true
-                }
+        Ok((status, msg)) => match status {
+            r2r::GoalStatus::Aborted => {
+                r2r::log_info!(
+                    "ur_script_controller",
+                    "Goal succesfully aborted with: {:?}",
+                    msg
+                );
+                let _ = g.publish_feedback(URScriptControl::Feedback {
+                    current_state: "Goal succesfully aborted.".into(),
+                });
+                true
             }
-            
-        }
+            _ => {
+                r2r::log_info!("ur_script_controller", "Executing the UR Script succeeded.");
+                let _ = g.publish_feedback(URScriptControl::Feedback {
+                    current_state: "Executing the UR Script succeeded.".into(),
+                });
+                true
+            }
+        },
         Err(e) => {
             r2r::log_error!(
                 "ur_script_controller",
-                "UR Script Driver Action failed with: {:?}", e,
+                "UR Script Driver Action failed with: {:?}",
+                e,
             );
             let _ = g.publish_feedback(URScriptControl::Feedback {
                 current_state: "UR Script Driver Action failed. Aborting.".into(),
