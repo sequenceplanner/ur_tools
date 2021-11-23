@@ -1,0 +1,4 @@
+def stop_vacuum_script():
+  set_tool_digital_out(1, False)
+end
+stop_vacuum_script()

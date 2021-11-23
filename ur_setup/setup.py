@@ -30,6 +30,10 @@ setup(
             os.path.join("share", package_name, "robots", "case_r1"),
             glob("robots/case_r1/*"),
         ),
+        (
+            os.path.join("share", package_name, "robots", "case_r4"),
+            glob("robots/case_r4/*"),
+        ),
         ("share/" + package_name, ["package.xml"]),
     ],
     install_requires=["setuptools"],
