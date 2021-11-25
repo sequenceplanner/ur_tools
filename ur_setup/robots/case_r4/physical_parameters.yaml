@@ -1,12 +1,12 @@
 # Physical parameters
 
 dh_parameters:
-  d1: 0.152
-  a2: -0.244
-  a3: -0.213
-  d4: 0.131  # wrist1_length = d4 - elbow_offset - shoulder_offset
-  d5: 0.085
-  d6: 0.092
+  d1: 0.15185
+  a2: -0.24355
+  a3: -0.2132
+  d4: 0.13105
+  d5: 0.08535
+  d6: 0.0921
 
 offsets:
   shoulder_offset: 0.120 # measured from model

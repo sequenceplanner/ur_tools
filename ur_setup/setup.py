@@ -31,6 +31,14 @@ setup(
             glob("robots/case_r1/*"),
         ),
         (
+            os.path.join("share", package_name, "robots", "case_r2"),
+            glob("robots/case_r2/*"),
+        ),
+        (
+            os.path.join("share", package_name, "robots", "case_r3"),
+            glob("robots/case_r3/*"),
+        ),
+        (
             os.path.join("share", package_name, "robots", "case_r4"),
             glob("robots/case_r4/*"),
         ),
