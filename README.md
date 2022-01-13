@@ -4,7 +4,8 @@ A collection of tools for controlling Universal Robots using UR Scripts. Scripts
 
 ### Depends on:
 https://github.com/sequenceplanner/ur_script_driver \
-https://github.com/sequenceplanner/ur_script_msgs
+https://github.com/sequenceplanner/ur_script_msgs \
+https://github.com/sequenceplanner/ur_tools_msgs.git
 
 ### Structure:
 ![This is an image](/images/structure.png)
