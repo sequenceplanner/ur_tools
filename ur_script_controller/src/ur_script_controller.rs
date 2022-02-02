@@ -75,7 +75,7 @@ async fn ur_script_controller_server(
                         let g_clone = g.clone();
                         match execute_script(g_clone, &script, &urc_client).await {
                             true => {
-                                g.succeed(URScriptControl::Result { success: false })
+                                g.succeed(URScriptControl::Result { success: true })
                                     .expect("could not send result");
                                 continue;
                             }
@@ -110,8 +110,8 @@ async fn generate_script(
 
     let ursg_req = GenerateURScript::Request {
         command: g.goal.command.to_string(),
-        acceleration: g.goal.acceleration,
-        velocity: g.goal.velocity,
+        acceleration: g.goal.acceleration * g.goal.acceleration_scaling,
+        velocity: g.goal.velocity * g.goal.velocity_scaling,
         goal_feature_name: g.goal.goal_feature_name.to_string(),
         tcp_name: g.goal.tcp_name.to_string(),
         use_execution_time: g.goal.use_execution_time,
