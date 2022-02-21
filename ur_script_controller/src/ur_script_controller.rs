@@ -1,57 +1,101 @@
 use futures::stream::Stream;
 use futures::StreamExt;
 use r2r::ur_script_msgs::action::ExecuteScript;
-use r2r::ur_tools_msgs::action::URScriptControl;
+use r2r::ur_tools_msgs::action::URControl;
 use r2r::ur_tools_msgs::srv::GenerateURScript;
 use r2r::ActionServerGoal;
+use r2r::ParameterValue;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = r2r::Context::create()?;
     let mut node = r2r::Node::create(ctx, "ur_script_controller", "")?;
 
-    let action = node.create_action_server::<URScriptControl::Action>("ur_script_controller")?;
-    let ursg_client = node.create_client::<GenerateURScript::Service>("ur_script_generator")?;
-    let urc_client = node.create_action_client::<ExecuteScript::Action>("ur_script")?;
-    let waiting_for_ursg_server = node.is_available(&ursg_client)?;
-    let waiting_for_urc_server = node.is_available(&urc_client)?;
+    let params = node.params.clone();
+    let params_things = params.lock().unwrap();
+    let simple = match params_things.get("simple_simulation").unwrap() {
+        ParameterValue::Bool(value) => *value,
+        _ => true,
+    };
+
+    let action = node.create_action_server::<URControl::Action>("ur_script_controller")?;
+
+    match simple {
+        true => {
+            let simple_client =
+                node.create_action_client::<URControl::Action>("simple_simulation")?;
+            let waiting_for_simple_server = node.is_available(&simple_client)?;
+
+            r2r::log_warn!(
+                "ur_script_controller",
+                "Waiting for the Simple Simulation Service..."
+            );
+            waiting_for_simple_server.await?;
+            r2r::log_info!(
+                "ur_script_controller",
+                "Simple Simulation Service available."
+            );
+
+            tokio::task::spawn(async move {
+                let result = simple_controller_server(action, simple_client).await;
+                match result {
+                    Ok(()) => r2r::log_info!(
+                        "ur_script_controller",
+                        "Simple Controller Service call succeeded."
+                    ),
+                    Err(e) => r2r::log_error!(
+                        "ur_script_controller",
+                        "Simple Controller Service call failed with: {}.",
+                        e
+                    ),
+                };
+            });
+        }
+        false => {
+            let ursg_client =
+                node.create_client::<GenerateURScript::Service>("ur_script_generator")?;
+            let urc_client = node.create_action_client::<ExecuteScript::Action>("ur_script")?;
+            let waiting_for_ursg_server = node.is_available(&ursg_client)?;
+            let waiting_for_urc_server = node.is_available(&urc_client)?;
+
+            r2r::log_warn!(
+                "ur_script_controller",
+                "Waiting for the UR Script Generator Service..."
+            );
+            waiting_for_ursg_server.await?;
+            r2r::log_info!(
+                "ur_script_controller",
+                "UR Script Generator Service available."
+            );
+
+            r2r::log_warn!(
+                "ur_script_controller",
+                "Waiting for the UR Script Driver..."
+            );
+            waiting_for_urc_server.await?;
+            r2r::log_info!("ur_script_controller", "UR Script Driver available.");
+
+            r2r::log_info!("ur_script_controller", "UR Script Controller node started.");
+
+            tokio::task::spawn(async move {
+                let result = ur_script_controller_server(action, ursg_client, urc_client).await;
+                match result {
+                    Ok(()) => r2r::log_info!(
+                        "ur_script_controller",
+                        "UR Script Controller Service call succeeded."
+                    ),
+                    Err(e) => r2r::log_error!(
+                        "ur_script_controller",
+                        "UR Script Controller Service call failed with: {}.",
+                        e
+                    ),
+                };
+            });
+        }
+    }
 
     let handle = std::thread::spawn(move || loop {
         node.spin_once(std::time::Duration::from_millis(100));
-    });
-
-    r2r::log_warn!(
-        "ur_script_controller",
-        "Waiting for the UR Script Generator Service..."
-    );
-    waiting_for_ursg_server.await?;
-    r2r::log_info!(
-        "ur_script_controller",
-        "UR Script Generator Service available."
-    );
-
-    r2r::log_warn!(
-        "ur_script_controller",
-        "Waiting for the UR Script Driver..."
-    );
-    waiting_for_urc_server.await?;
-    r2r::log_info!("ur_script_controller", "UR Script Driver available.");
-
-    r2r::log_info!("ur_script_controller", "UR Script Controller node started.");
-
-    tokio::task::spawn(async move {
-        let result = ur_script_controller_server(action, ursg_client, urc_client).await;
-        match result {
-            Ok(()) => r2r::log_info!(
-                "ur_script_controller",
-                "UR Script Controller Service call succeeded."
-            ),
-            Err(e) => r2r::log_error!(
-                "ur_script_controller",
-                "UR Script Controller Service call failed with: {}.",
-                e
-            ),
-        };
     });
 
     handle.join().unwrap();
@@ -60,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn ur_script_controller_server(
-    mut requests: impl Stream<Item = r2r::ActionServerGoalRequest<URScriptControl::Action>> + Unpin,
+    mut requests: impl Stream<Item = r2r::ActionServerGoalRequest<URControl::Action>> + Unpin,
     ursg_client: r2r::Client<GenerateURScript::Service>,
     urc_client: r2r::ActionClient<ExecuteScript::Action>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -75,18 +119,18 @@ async fn ur_script_controller_server(
                         let g_clone = g.clone();
                         match execute_script(g_clone, &script, &urc_client).await {
                             true => {
-                                g.succeed(URScriptControl::Result { success: true })
+                                g.succeed(URControl::Result { success: true })
                                     .expect("could not send result");
                                 continue;
                             }
                             false => {
-                                let _ = g.abort(URScriptControl::Result { success: false });
+                                let _ = g.abort(URControl::Result { success: false });
                                 continue;
                             }
                         }
                     }
                     None => {
-                        let _ = g.abort(URScriptControl::Result { success: false });
+                        let _ = g.abort(URControl::Result { success: false });
                         continue;
                     }
                 }
@@ -97,14 +141,14 @@ async fn ur_script_controller_server(
 }
 
 async fn generate_script(
-    g: ActionServerGoal<URScriptControl::Action>,
+    g: ActionServerGoal<URControl::Action>,
     ursg_client: &r2r::Client<GenerateURScript::Service>,
 ) -> Option<String> {
     r2r::log_info!(
         "ur_script_controller",
         "Sending request to UR Script Generator."
     );
-    let _ = g.publish_feedback(URScriptControl::Feedback {
+    let _ = g.publish_feedback(URControl::Feedback {
         current_state: "Sending request to UR Script Generator.".into(),
     });
 
@@ -136,14 +180,14 @@ async fn generate_script(
     match ursg_response.success {
         true => {
             r2r::log_info!("ur_script_controller", "Got generated UR Script.");
-            let _ = g.publish_feedback(URScriptControl::Feedback {
+            let _ = g.publish_feedback(URControl::Feedback {
                 current_state: "Got generated UR Script.".into(),
             });
             Some(ursg_response.script)
         }
         false => {
             r2r::log_error!("ur_script_controller", "Failed to get generated UR Script.");
-            let _ = g.publish_feedback(URScriptControl::Feedback {
+            let _ = g.publish_feedback(URControl::Feedback {
                 current_state: "Failed to get generated UR Script.".into(),
             });
             None
@@ -152,7 +196,7 @@ async fn generate_script(
 }
 
 async fn execute_script(
-    g: ActionServerGoal<URScriptControl::Action>,
+    g: ActionServerGoal<URControl::Action>,
     script: &str,
     urc_client: &r2r::ActionClient<ExecuteScript::Action>,
 ) -> bool {
@@ -164,7 +208,7 @@ async fn execute_script(
         "ur_script_controller",
         "Sending request to UR Script Driver."
     );
-    let _ = g.publish_feedback(URScriptControl::Feedback {
+    let _ = g.publish_feedback(URControl::Feedback {
         current_state: "Sending request to UR Script Driver.".into(),
     });
 
@@ -190,14 +234,14 @@ async fn execute_script(
                     "Goal succesfully aborted with: {:?}",
                     msg
                 );
-                let _ = g.publish_feedback(URScriptControl::Feedback {
+                let _ = g.publish_feedback(URControl::Feedback {
                     current_state: "Goal succesfully aborted.".into(),
                 });
                 true
             }
             _ => {
                 r2r::log_info!("ur_script_controller", "Executing the UR Script succeeded.");
-                let _ = g.publish_feedback(URScriptControl::Feedback {
+                let _ = g.publish_feedback(URControl::Feedback {
                     current_state: "Executing the UR Script succeeded.".into(),
                 });
                 true
@@ -209,7 +253,100 @@ async fn execute_script(
                 "UR Script Driver Action failed with: {:?}",
                 e,
             );
-            let _ = g.publish_feedback(URScriptControl::Feedback {
+            let _ = g.publish_feedback(URControl::Feedback {
+                current_state: "UR Script Driver Action failed. Aborting.".into(),
+            });
+            false
+        }
+    }
+}
+
+async fn simple_controller_server(
+    mut requests: impl Stream<Item = r2r::ActionServerGoalRequest<URControl::Action>> + Unpin,
+    simple_client: r2r::ActionClient<URControl::Action>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    loop {
+        match requests.next().await {
+            Some(request) => {
+                let (mut g, mut _cancel) =
+                    request.accept().expect("Could not accept goal request.");
+                let g_clone = g.clone();
+                match simple_simulate(g_clone, &simple_client).await {
+                    true => {
+                        g.succeed(URControl::Result { success: true })
+                            .expect("could not send result");
+                        continue;
+                    }
+                    false => {
+                        let _ = g.abort(URControl::Result { success: false });
+                        continue;
+                    }
+                }
+            }
+            None => (),
+        }
+    }
+}
+
+async fn simple_simulate(
+    g: ActionServerGoal<URControl::Action>,
+    simple_client: &r2r::ActionClient<URControl::Action>,
+) -> bool {
+    let goal = g.goal.clone();
+
+    r2r::log_info!(
+        "ur_script_controller",
+        "Sending request to Simple Simulator."
+    );
+    let _ = g.publish_feedback(URControl::Feedback {
+        current_state: "Sending request to Simple Simulator.".into(),
+    });
+
+    let (_goal, result, _feedback) = match simple_client.send_goal_request(goal) {
+        Ok(x) => match x.await {
+            Ok(y) => y,
+            Err(_) => {
+                r2r::log_info!(
+                    "ur_script_controller",
+                    "Could not send goal request to Simple Simulator."
+                );
+                return false;
+            }
+        },
+        Err(_) => {
+            r2r::log_info!("ur_script_controller", "Did not get goal.");
+            return false;
+        }
+    };
+
+    match result.await {
+        Ok((status, msg)) => match status {
+            r2r::GoalStatus::Aborted => {
+                r2r::log_info!(
+                    "ur_script_controller",
+                    "Goal succesfully aborted with: {:?}",
+                    msg
+                );
+                let _ = g.publish_feedback(URControl::Feedback {
+                    current_state: "Goal succesfully aborted.".into(),
+                });
+                true
+            }
+            _ => {
+                r2r::log_info!("ur_script_controller", "Executing the UR Script succeeded.");
+                let _ = g.publish_feedback(URControl::Feedback {
+                    current_state: "Executing the UR Script succeeded.".into(),
+                });
+                true
+            }
+        },
+        Err(e) => {
+            r2r::log_error!(
+                "ur_script_controller",
+                "UR Script Driver Action failed with: {:?}",
+                e,
+            );
+            let _ = g.publish_feedback(URControl::Feedback {
                 current_state: "UR Script Driver Action failed. Aborting.".into(),
             });
             false
