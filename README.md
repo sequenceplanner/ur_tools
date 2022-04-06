@@ -1,4 +1,7 @@
-# ur_tools
+# DEPRECATED
+
+Now, everything is at ur_controller and the robot files are at chalmers_robots_info
+### ur_tools
 ### Description:
 A collection of tools for controlling Universal Robots using UR Scripts. Scripts are generated using `Tera` templates, and communicated to the robot using the UR Script Driver.
 
